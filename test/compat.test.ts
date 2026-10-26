@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import * as upstream from "pi-subagents/background-work";
 import * as ours from "../src/registry";
@@ -256,12 +255,19 @@ describe("compatibility with pi-subagents/background-work", () => {
 		}
 	});
 
-	it("reports snapshotBackgroundWork signature drift without failing (informational)", () => {
-		const signature = (path: string) =>
-			readFileSync(new URL(path, import.meta.url), "utf8")
-				.split("\n")
-				.find((line) => line.includes("function snapshotBackgroundWork"));
-		console.info(`[compat] upstream d.ts: ${signature("../node_modules/pi-subagents/src/api/background-work.d.ts")}`);
-		console.info(`[compat] ours: ${signature("../src/registry.ts")}`);
+});
+
+// Informational: pi-subagents#3071. Upstream's bg_wait consumer passes the session file path first and the uuid
+// second. A provider keyed by the uuid must still be returned. Asserts against 0.83.0; a failure means upstream
+// changed that behaviour, so review it before changing this package.
+describe("informational: pi-subagents#3071 session-id forms", () => {
+	it("returns a uuid-keyed item to upstream snapshot when the file path is listed first", () => {
+		ours.registerBackgroundWorkProvider({
+			name: "uuid-keyed",
+			listActiveWork: (context) => (context?.sessionIds.includes("uuid-1") ? [{ id: "job", sessionId: "uuid-1" }] : []),
+		});
+		expect(upstream.snapshotBackgroundWork(["/path/session.jsonl", "uuid-1"], 1).items).toEqual([
+			{ provider: "uuid-keyed", id: "job", sessionId: "uuid-1" },
+		]);
 	});
 });
