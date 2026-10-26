@@ -248,11 +248,14 @@ describe("background-work registry bounds and slot validation", () => {
 		);
 	});
 
-	it("enforces the item-count cap per provider", () => {
-		registerBackgroundWorkProvider({
-			name: "patty",
-			listActiveWork: () => Array.from({ length: 10_001 }, (_, index) => ({ id: `job-${index}`, sessionId: "session-a" })),
-		});
+	it("accepts exactly 10000 items per provider and rejects 10001", () => {
+		const items = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `job-${index}`, sessionId: "session-a" }));
+
+		registerBackgroundWorkProvider({ name: "patty", listActiveWork: () => items(10_000) });
+		expect(snapshotBackgroundWork(["session-a"]).items).toHaveLength(10_000);
+
+		clearRegistry();
+		registerBackgroundWorkProvider({ name: "patty", listActiveWork: () => items(10_001) });
 		expect(() => snapshotBackgroundWork(["session-a"])).toThrow("maximum is 10000");
 	});
 
@@ -285,6 +288,9 @@ describe("background-work registry bounds and slot validation", () => {
 
 		Reflect.set(globalThis, SLOT, { version: 1, providers: {} });
 		expect(() => listBackgroundWorkProviders()).toThrow("Unsupported background-work registry");
+
+		Reflect.set(globalThis, SLOT, []);
+		expect(() => listBackgroundWorkProviders()).toThrow("Malformed background-work registry");
 	});
 
 	it("rejects a provider stored under a key that does not match its name", () => {

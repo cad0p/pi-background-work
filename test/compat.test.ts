@@ -155,6 +155,13 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 			api.listBackgroundWorkProviders();
 		},
 	],
+	[
+		"array registry slot",
+		(api) => {
+			Reflect.set(globalThis, SLOT, []);
+			api.listBackgroundWorkProviders();
+		},
+	],
 ];
 
 afterEach(clearRegistry);
@@ -195,6 +202,17 @@ describe("compatibility with pi-subagents/background-work", () => {
 		const expected = failureOf(ours, run);
 		expect(expected).not.toBe("no error");
 		expect(failureOf(upstream, run)).toBe(expected);
+	});
+
+	it("accepts exactly 10000 items per provider on both sides", () => {
+		for (const [, api] of apis) {
+			clearRegistry();
+			api.registerBackgroundWorkProvider({
+				name: "full",
+				listActiveWork: () => Array.from({ length: 10_000 }, (_, index) => ({ id: `job-${index}`, sessionId: "s" })),
+			});
+			expect(api.snapshotBackgroundWork(["s"], 1).items).toHaveLength(10_000);
+		}
 	});
 
 	it("passes the same reconcile and listing context from both sides", () => {
