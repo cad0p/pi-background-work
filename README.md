@@ -19,10 +19,9 @@ The entry point is TypeScript (`./src/index.ts`). Load it through a TypeScript-a
 A provider reports background work that is still pending for a session. Register one provider per package per process. Registering a name that already exists replaces the earlier provider.
 
 ```ts
-import { registerBackgroundWorkProvider, sessionKey } from "@cad0p/pi-background-work";
+import { registerBackgroundWorkProvider } from "@cad0p/pi-background-work";
 
 const jobs = new Map<string, { id: string; sessionId: string }>();
-const ownerKey = sessionKey(sessionManager); // any object with getSessionId() and getSessionFile()
 
 registerBackgroundWorkProvider({
   name: "my-jobs",
@@ -34,7 +33,7 @@ registerBackgroundWorkProvider({
 });
 ```
 
-Follow these rules (from the upstream call-5 provider rules):
+These are this package's recommendations for providers:
 
 1. Re-register on `session_start` with reason `reload`. On other starts, register only if the name is absent.
 2. Entries in shared state carry a protocol version. Read the current version and the one before it, and ignore others.
@@ -49,9 +48,9 @@ import { sessionIdentityForms, snapshotBackgroundWork } from "@cad0p/pi-backgrou
 const { providers, items } = snapshotBackgroundWork(sessionIdentityForms(sessionManager));
 ```
 
-`snapshotBackgroundWork(sessionIds, nowMs?)` is all-or-nothing. A throwing provider, a malformed registry, or a duplicate id throws for the whole snapshot. To tolerate a bad provider, list each provider from `listBackgroundWorkProviders()` inside its own `try`, and warn with the provider name.
+`snapshotBackgroundWork(sessionIds, nowMs?)` is all-or-nothing. A throwing provider, a malformed registry, or a duplicate id throws for the whole snapshot. To tolerate a bad provider, list each provider from `listBackgroundWorkProviders()` inside its own `try`, and warn with the provider name. Listing providers yourself skips the reconcile calls, item validation, duplicate checks and session filtering that `snapshotBackgroundWork` performs. Validate and filter the items yourself if you use this form.
 
-An empty snapshot means nothing is pending now. A provider may remove an item 150 to 500 ms before its wake, so confirm an empty result with a second snapshot about 1 s later.
+An empty snapshot means nothing is pending now. A provider may remove its item shortly before its wake arrives, so confirm an empty result with a second snapshot before treating the work as finished.
 
 ## Session ids
 
@@ -68,7 +67,7 @@ Key items by `sessionKey(sm)`, which returns the session uuid. Upstream consumer
 - `maxBackgroundWait`: minutes, a finite number greater than 0. Default `30`.
 - `maxCrashRecoveries`: an integer 0 or greater. Default `1`.
 
-Files are read in this order: `<cwd>/.pi/background-work.json` (project), then `<agentDir>/background-work.json`. `agentDir` is `PI_CODING_AGENT_DIR` (with `~` expanded) when set, otherwise `~/.pi/agent`. Per key, the first valid value wins: project, then user, then default. Invalid JSON or an invalid value is ignored and reported in `warnings`. Nothing throws. Files are read on every call, so edits apply without a restart.
+Files are read in this order: `<cwd>/.pi/background-work.json` (project), then `<agentDir>/background-work.json`. `agentDir` is `PI_CODING_AGENT_DIR` when set, otherwise `~/.pi/agent`. A `PI_CODING_AGENT_DIR` of `~` or starting with `~/` is expanded to the home directory. Other forms are not expanded: `~\` on Windows and `file://` URLs, which pi's own path normalization handles. Per key, the first valid value wins: project, then user, then default. Invalid JSON or an invalid value is ignored and reported in `warnings`. Nothing throws. Files are read on every call, so edits apply without a restart.
 
 ## Crash recovery
 
@@ -79,7 +78,7 @@ const { policy } = readBackgroundWorkPolicy({ cwd });
 const decision = crashRecoveryDecision(consecutiveInterruptions, policy);
 ```
 
-`triggerTurn` is `true` while `consecutiveInterruptions <= maxCrashRecoveries`. Beyond that it is `false`, and `note` reads "interrupted N times by a crash; ask the user before resuming".
+`triggerTurn` is `true` while `consecutiveInterruptions <= maxCrashRecoveries`. Beyond that it is `false`, and `note` reads "interrupted once by a crash; ask the user before resuming" for one interruption, "interrupted twice by a crash; ask the user before resuming" for two, and "interrupted N times by a crash; ask the user before resuming" otherwise.
 
 Convention: count consecutive crash interruptions per item. Persist that a recovery wake was delivered before delivering it, so each crash wakes at most once per item.
 
