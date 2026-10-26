@@ -88,6 +88,73 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 			api.listBackgroundWorkProviders();
 		},
 	],
+	[
+		"unknown field and invalid name",
+		(api) => {
+			// @ts-expect-error malformed on purpose
+			api.registerBackgroundWorkProvider({ name: 42, listActiveWork: () => [], extra: true });
+		},
+	],
+	[
+		"provider name longer than 128",
+		(api) => {
+			api.registerBackgroundWorkProvider({ name: "n".repeat(129), listActiveWork: () => [] });
+		},
+	],
+	[
+		"non-array wakeChannels",
+		(api) => {
+			// @ts-expect-error malformed on purpose
+			api.registerBackgroundWorkProvider({ name: "wake", wakeChannels: "a", listActiveWork: () => [] });
+		},
+	],
+	[
+		"duplicate wakeChannels",
+		(api) => {
+			api.registerBackgroundWorkProvider({ name: "wake", wakeChannels: ["a", "a"], listActiveWork: () => [] });
+		},
+	],
+	[
+		"item id longer than 256",
+		(api) => {
+			api.registerBackgroundWorkProvider({ name: "long-id", listActiveWork: () => [{ id: "x".repeat(257), sessionId: "s" }] });
+			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
+		"snapshot with no session ids",
+		(api) => {
+			api.snapshotBackgroundWork([], 1);
+		},
+	],
+	[
+		"non-array listActiveWork result",
+		(api) => {
+			// @ts-expect-error non-array on purpose
+			api.registerBackgroundWorkProvider({ name: "object", listActiveWork: () => ({}) });
+			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
+		"reconcile throwing",
+		(api) => {
+			api.registerBackgroundWorkProvider({
+				name: "boom",
+				reconcile: () => {
+					throw new Error("boom");
+				},
+				listActiveWork: () => [],
+			});
+			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
+		"malformed registry slot",
+		(api) => {
+			Reflect.set(globalThis, SLOT, "nope");
+			api.listBackgroundWorkProviders();
+		},
+	],
 ];
 
 afterEach(clearRegistry);
