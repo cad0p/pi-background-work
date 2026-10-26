@@ -1,0 +1,152 @@
+name: Upstream probe
+
+# Daily check that this registry port still matches the latest pi-subagents
+# release. A passing (upstream version, main commit) pair is cached, so the
+# probe is a no-op until either side changes. A failure comments on, or opens,
+# the single open issue labelled upstream-probe; the next pass closes it.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Resolve upstream version
+        id: upstream
+        run: echo "version=$(npm view pi-subagents version)" >> "$GITHUB_OUTPUT"
+
+      # An exact hit means this version already passed on this commit. A
+      # prefix hit restores the last passing source as the diff baseline.
+      - name: Restore last passing probe
+        id: gate
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .probe-pass
+          key: probe-pass-${{ steps.upstream.outputs.version }}-${{ github.sha }}
+          restore-keys: probe-pass-
+
+      - name: Set up pnpm
+        if: steps.gate.outputs.cache-hit != 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Set up Node
+        if: steps.gate.outputs.cache-hit != 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        if: steps.gate.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
+      # The diff is informational. It compares the published upstream tarball
+      # with the last passing source, or with 0.83.0 on the first run.
+      - name: Diff upstream against last passing source
+        if: steps.gate.outputs.cache-hit != 'true'
+        env:
+          VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          mkdir -p .probe/current .probe/base
+          npm pack "pi-subagents@$VERSION" --pack-destination .probe/current
+          tar -xzf .probe/current/*.tgz -C .probe/current --strip-components=1
+          base=.probe-pass/background-work.js
+          if [ ! -f "$base" ]; then
+            npm pack pi-subagents@0.83.0 --pack-destination .probe/base
+            tar -xzf .probe/base/*.tgz -C .probe/base --strip-components=1
+            base=.probe/base/src/api/background-work.js
+          fi
+          diff -u "$base" .probe/current/src/api/background-work.js > .probe/diff.patch || true
+
+      - name: Install upstream in runner
+        if: steps.gate.outputs.cache-hit != 'true'
+        env:
+          VERSION: ${{ steps.upstream.outputs.version }}
+        run: pnpm add -D --ignore-scripts "pi-subagents@$VERSION"
+
+      - name: Compatibility suite
+        if: steps.gate.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          pnpm exec vitest run test/compat.test.ts 2>&1 | tee .probe/compat.log
+
+      - name: Record pass
+        if: success() && steps.gate.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .probe-pass
+          cp .probe/current/src/api/background-work.js .probe-pass/background-work.js
+
+      - name: Save pass
+        if: success() && steps.gate.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .probe-pass
+          key: probe-pass-${{ steps.upstream.outputs.version }}-${{ github.sha }}
+
+      - name: Upload diff and log
+        if: always() && steps.gate.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: upstream-probe
+          path: |
+            .probe/diff.patch
+            .probe/compat.log
+          if-no-files-found: ignore
+
+      - name: Open or update alarm issue
+        if: failure() && steps.gate.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.upstream.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="$RUNNER_TEMP/probe-alarm.md"
+          {
+            echo "Probe run: $RUN_URL"
+            echo
+            echo "pi-subagents $VERSION against $GITHUB_SHA."
+            echo
+            echo "Compatibility log (tail):"
+            tail -n 80 .probe/compat.log 2>/dev/null || echo "(no compat log: failed before the suite ran)"
+            echo
+            echo "Upstream diff against last passing source (head):"
+            head -n 200 .probe/diff.patch 2>/dev/null || echo "(no diff)"
+          } > "$body"
+          num=$(gh issue list --label upstream-probe --state open --json number,title --jq '.[] | select(.title | startswith("Upstream probe:")) | .number' | head -n 1)
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file "$body"
+          else
+            gh label create upstream-probe --force --color B60205 --description "pi-subagents compatibility probe failure"
+            gh issue create --label upstream-probe --title "Upstream probe: pi-subagents $VERSION fails" --body-file "$body"
+          fi
+
+      - name: Close alarm issue on pass
+        if: success() && steps.gate.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          num=$(gh issue list --label upstream-probe --state open --json number,title --jq '.[] | select(.title | startswith("Upstream probe:")) | .number' | head -n 1)
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "Probe passes for pi-subagents $VERSION on $GITHUB_SHA; closing."
+            gh issue close "$num"
+          fi
