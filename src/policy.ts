@@ -98,9 +98,9 @@ export function readBackgroundWorkPolicy(options: { cwd: string; agentDir?: stri
 /** Trigger a recovery wake while the item has been interrupted at most `maxCrashRecoveries` times in a row. */
 export function crashRecoveryDecision(consecutiveInterruptions: number, policy: BackgroundWorkPolicy): CrashRecoveryDecision {
 	if (consecutiveInterruptions <= policy.maxCrashRecoveries) return { triggerTurn: true };
-	const times = consecutiveInterruptions === 1 ? "time" : "times";
+	const times = consecutiveInterruptions === 1 ? "once" : consecutiveInterruptions === 2 ? "twice" : `${consecutiveInterruptions} times`;
 	return {
 		triggerTurn: false,
-		note: `interrupted ${consecutiveInterruptions} ${times} by a crash; ask the user before resuming`,
+		note: `interrupted ${times} by a crash; ask the user before resuming`,
 	};
 }

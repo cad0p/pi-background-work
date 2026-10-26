@@ -97,6 +97,7 @@ describe("readBackgroundWorkPolicy", () => {
 		mkdirSync(join(home, "agent"), { recursive: true });
 		writeFileSync(join(home, "agent", "background-work.json"), JSON.stringify({ maxCrashRecoveries: 4 }));
 		vi.stubEnv("HOME", home);
+		vi.stubEnv("USERPROFILE", home);
 		vi.stubEnv("PI_CODING_AGENT_DIR", "~/agent");
 		expect(readBackgroundWorkPolicy({ cwd }).policy.maxCrashRecoveries).toBe(4);
 	});
@@ -116,18 +117,22 @@ describe("crashRecoveryDecision", () => {
 		expect(crashRecoveryDecision(1, policy)).toEqual({ triggerTurn: true });
 	});
 
-	it("asks the user past maxCrashRecoveries, with a pluralized note", () => {
+	it("asks the user past maxCrashRecoveries, with a count-aware note", () => {
 		expect(crashRecoveryDecision(2, policy)).toEqual({
 			triggerTurn: false,
-			note: "interrupted 2 times by a crash; ask the user before resuming",
+			note: "interrupted twice by a crash; ask the user before resuming",
+		});
+		expect(crashRecoveryDecision(3, policy)).toEqual({
+			triggerTurn: false,
+			note: "interrupted 3 times by a crash; ask the user before resuming",
 		});
 	});
 
-	it("uses the singular for one interruption when zero recoveries are allowed", () => {
+	it("uses 'once' for one interruption when zero recoveries are allowed", () => {
 		expect(crashRecoveryDecision(0, { ...policy, maxCrashRecoveries: 0 })).toEqual({ triggerTurn: true });
 		expect(crashRecoveryDecision(1, { ...policy, maxCrashRecoveries: 0 })).toEqual({
 			triggerTurn: false,
-			note: "interrupted 1 time by a crash; ask the user before resuming",
+			note: "interrupted once by a crash; ask the user before resuming",
 		});
 	});
 });
