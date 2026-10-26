@@ -15,4 +15,8 @@ describe("session identity", () => {
 		expect(sessionIdentityForms(manager("uuid-1", undefined))).toEqual(["uuid-1"]);
 		expect(sessionIdentityForms(manager("uuid-1", "uuid-1"))).toEqual(["uuid-1"]);
 	});
+
+	it("drops an empty session file path", () => {
+		expect(sessionIdentityForms(manager("uuid-1", ""))).toEqual(["uuid-1"]);
+	});
 });

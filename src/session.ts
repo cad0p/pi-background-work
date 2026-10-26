@@ -12,5 +12,5 @@ export function sessionKey(sessionManager: SessionIdentitySource): string {
 /** Every identity form of a session, uuid first, for `snapshotBackgroundWork`. */
 export function sessionIdentityForms(sessionManager: SessionIdentitySource): string[] {
 	const forms = [sessionManager.getSessionId(), sessionManager.getSessionFile()];
-	return [...new Set(forms.filter((form): form is string => form !== undefined))];
+	return [...new Set(forms.filter((form): form is string => form !== undefined && form !== ""))];
 }
