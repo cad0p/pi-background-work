@@ -1,0 +1,49 @@
+{
+  "name": "@cad0p/pi-background-work",
+  "version": "0.0.1",
+  "description": "Zero-dependency TypeScript implementation of the pi-subagents background-work registry v1, with owner policies and an upstream compatibility probe",
+  "author": "cad0p",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cad0p/pi-background-work.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pi",
+    "pi-subagents",
+    "background-work",
+    "registry"
+  ],
+  "files": [
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ test/"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.27.0",
+    "globals": "^16.1.0",
+    "pi-subagents": "0.83.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.1",
+    "vitest": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
