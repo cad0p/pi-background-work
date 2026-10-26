@@ -75,11 +75,13 @@ jobs:
           fi
           diff -u "$base" .probe/current/src/api/background-work.js > .probe/diff.patch || true
 
+      # minimum-release-age=0: without it pnpm may rewrite pnpm-workspace.yaml
+      # (minimumReleaseAgeExclude) for a release younger than the age gate.
       - name: Install upstream in runner
         if: steps.gate.outputs.cache-hit != 'true'
         env:
           VERSION: ${{ steps.upstream.outputs.version }}
-        run: pnpm add -D --ignore-scripts "pi-subagents@$VERSION"
+        run: pnpm add -D --ignore-scripts --config.minimum-release-age=0 "pi-subagents@$VERSION"
 
       - name: Compatibility suite
         if: steps.gate.outputs.cache-hit != 'true'
