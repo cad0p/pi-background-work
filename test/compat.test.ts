@@ -124,6 +124,12 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 		},
 	],
 	[
+		"wake channel longer than 256",
+		(api) => {
+			api.registerBackgroundWorkProvider({ name: "wake", wakeChannels: ["w".repeat(257)], listActiveWork: () => [] });
+		},
+	],
+	[
 		"item id longer than 256",
 		(api) => {
 			api.registerBackgroundWorkProvider({ name: "long-id", listActiveWork: () => [{ id: "x".repeat(257), sessionId: "s" }] });
@@ -155,6 +161,26 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 				listActiveWork: () => [],
 			});
 			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
+		"listActiveWork throwing",
+		(api) => {
+			api.registerBackgroundWorkProvider({
+				name: "boom",
+				listActiveWork: () => {
+					throw new Error("boom");
+				},
+			});
+			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
+		"stored provider with an unknown field",
+		(api) => {
+			const providers = new Map<string, unknown>([["p", { name: "p", listActiveWork: () => [], extra: true }]]);
+			Reflect.set(globalThis, SLOT, { version: 1, providers });
+			api.listBackgroundWorkProviders();
 		},
 	],
 	[
@@ -205,6 +231,14 @@ describe("compatibility with pi-subagents/background-work", () => {
 			expect(api.snapshotBackgroundWork(["s"], 1)).toEqual(expected);
 			expect(api.listBackgroundWorkWakeChannels()).toEqual(["upstream:done"]);
 		}
+	});
+
+	it("names the unknown item field on both sides", () => {
+		const run = (api: Api): void => {
+			api.registerBackgroundWorkProvider({ name: "p", listActiveWork: () => [{ id: "a", sessionId: "s", extra: true }] });
+			api.snapshotBackgroundWork(["s"], 1);
+		};
+		for (const [, api] of apis) expect(failureOf(api, run)).toContain("unknown fields: extra");
 	});
 
 	it.each(failures)("rejects %s with the same error on both sides", (_label, run) => {

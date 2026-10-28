@@ -88,7 +88,7 @@ Convention: count consecutive crash interruptions per item. Persist that a recov
 
 The upstream `waitForSubagents` cases are not ported. They are listed in `test/registry.test.ts`.
 
-`.github/workflows/upstream-probe.yml` runs daily and on push to `main`. It installs the latest published `pi-subagents` on the runner only and runs the compat test. A version that passes is cached and not retested. A failure opens, or comments on, one issue labelled `upstream-probe`. A later pass closes it.
+`.github/workflows/upstream-probe.yml` runs daily and on push to `main`. It installs the latest published `pi-subagents` on the runner only and runs the compat test. A pass is cached per pair of upstream version and `main` commit, so a new upstream release or a new commit on `main` runs it again. A failure opens, or comments on, one issue labelled `upstream-probe`. A later pass closes it.
 
 ## Development
 
