@@ -42,11 +42,18 @@ export default function backgroundWorkFooter(pi: HostExtensionApi): void {
 		} catch {
 			return false;
 		}
-		const [sessionId] = forms;
-		if (sessionId === undefined) return true;
 		const nowMs = Date.now();
-		const sources = collectBackgroundWorkSources(forms, nowMs);
-		const text = composeFooterText(sources, readDisplays(), { sessionId, sessionIds: forms, nowMs });
+		let text: string | undefined;
+		try {
+			const [sessionId] = forms;
+			text = sessionId === undefined
+				? undefined
+				: composeFooterText(collectBackgroundWorkSources(forms, nowMs), readDisplays(), { sessionId, sessionIds: forms, nowMs });
+		} catch {
+			// A provider or display provider whose own getters throw must not reach the
+			// timer callback, which pi does not catch; keep what is on screen.
+			text = lastText;
+		}
 		if (text === lastText) return true;
 		try {
 			ctx.ui.setStatus(BACKGROUND_WORK_STATUS_KEY, text);

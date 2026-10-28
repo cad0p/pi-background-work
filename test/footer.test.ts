@@ -87,3 +87,22 @@ describe("composeFooterText", () => {
 		}
 	});
 });
+
+	it("returns a segment of exactly 48 graphemes unchanged and cuts a 49th", () => {
+		const at48 = "a".repeat(48);
+		const at49 = "a".repeat(48) + "b";
+		const displays = [display("patty", () => at48), display("demo", () => at49)];
+		const sources: BackgroundWorkSource[] = [source("patty", 1), source("demo", 1)];
+		expect(composeFooterText(sources, displays, CONTEXT)).toBe(PREFIX + at48 + SEPARATOR + "a".repeat(47) + "…");
+	});
+
+	it("never keeps the failure marker out of a capped segment", () => {
+		const sources: BackgroundWorkSource[] = [{ name: "n".repeat(60), failed: true }];
+		const text = composeFooterText(sources, [], CONTEXT);
+		expect(text?.endsWith(" ?")).toBe(true);
+		expect(text?.startsWith(PREFIX)).toBe(true);
+	});
+
+	it("trims describe output", () => {
+		expect(composeFooterText([source("demo", 1)], [display("demo", () => "  hi  ")], CONTEXT)).toBe(PREFIX + "hi");
+	});

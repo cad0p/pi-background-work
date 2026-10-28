@@ -26,17 +26,17 @@ function graphemesOf(text: string): string[] {
 
 /**
  * Cap the length in graphemes: cut at the last space or comma in
- * [MIN_CUT, MAX_SEGMENT - 1), else at MAX_SEGMENT - 1, and add one ellipsis.
+ * [MIN_CUT, limit - 1), else at limit - 1, and add one ellipsis.
  * Graphemes are not columns, so this bounds length, not display width.
  */
-function capSegment(text: string): string {
+function capSegment(text: string, limit: number = MAX_SEGMENT): string {
 	const graphemes = graphemesOf(text);
-	if (graphemes.length <= MAX_SEGMENT) return text;
-	for (let index = MAX_SEGMENT - 1; index >= MIN_CUT; index--) {
+	if (graphemes.length <= limit) return text;
+	for (let index = limit - 1; index >= MIN_CUT; index--) {
 		const grapheme = graphemes[index];
 		if (grapheme === " " || grapheme === ",") return `${graphemes.slice(0, index).join("").trimEnd()}…`;
 	}
-	return `${graphemes.slice(0, MAX_SEGMENT - 1).join("")}…`;
+	return `${graphemes.slice(0, limit - 1).join("")}…`;
 }
 
 function describeSource(
@@ -48,7 +48,8 @@ function describeSource(
 	if (display !== undefined) {
 		try {
 			const text = display.describe(source.items, context);
-			if (typeof text === "string" && text.trim() !== "") return capSegment(text);
+			const trimmed = typeof text === "string" ? text.trim() : "";
+			if (trimmed !== "") return capSegment(trimmed);
 		} catch {}
 	}
 	return capSegment(`${source.items.length} ${source.name}`);
@@ -63,7 +64,8 @@ export function composeFooterText(
 	const segments: string[] = [];
 	for (const source of sources) {
 		if ("failed" in source) {
-			segments.push(capSegment(`${source.name}${FAILED_SUFFIX}`));
+			// Cap the name, never the marker: a long name must still read as broken.
+			segments.push(`${capSegment(source.name, MAX_SEGMENT - FAILED_SUFFIX.length)}${FAILED_SUFFIX}`);
 			continue;
 		}
 		if (source.items.length === 0) continue;

@@ -61,16 +61,26 @@ function validateItems(provider: string, active: readonly unknown[], sessionIds:
 	return items;
 }
 
+/**
+ * v1's context, built fresh per call with a copied array: v1 does the same
+ * (`registry.ts:191`, `:197`), and a provider that mutates the object it was
+ * handed must not change what the next provider is filtered by.
+ */
+function contextFor(context: DescribeContext): DescribeContext {
+	return { sessionId: context.sessionId, sessionIds: [...context.sessionIds], nowMs: context.nowMs };
+}
+
 /** v1's reconcile-then-list sequence for one provider, or `undefined` when it failed. */
 function collectItems(provider: BackgroundWorkProvider, context: DescribeContext): BackgroundWorkItem[] | undefined {
 	try {
-		provider.reconcile?.(context);
+		provider.reconcile?.(contextFor(context));
 	} catch {
 		return undefined;
 	}
+	const listing = contextFor(context);
 	let active: unknown;
 	try {
-		active = provider.listActiveWork(context);
+		active = provider.listActiveWork(listing);
 	} catch {
 		return undefined;
 	}
@@ -97,6 +107,8 @@ export function collectBackgroundWorkSources(sessionIds: readonly string[], nowM
 	} catch {
 		return [];
 	}
+	// `listBackgroundWorkProviders` validates every entry, `name` included, so a
+	// provider that reaches this loop has a readable name.
 	return providers.map((provider) => {
 		const items = collectItems(provider, context);
 		return items === undefined ? { name: provider.name, failed: true } : { name: provider.name, items };

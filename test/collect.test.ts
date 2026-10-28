@@ -122,3 +122,41 @@ describe("collectBackgroundWorkSources", () => {
 		expect(collectBackgroundWorkSources(["session-a"], 1)).toEqual([]);
 	});
 });
+
+	it("accepts exactly 10,000 items and fails 10,001", () => {
+		const many = (count: number) =>
+			Array.from({ length: count }, (_, index) => ({ id: "job-" + index, sessionId: "session-a" }));
+		registerBackgroundWorkProvider({ name: "big", listActiveWork: () => many(10_000) });
+		expect(collectBackgroundWorkSources(["session-a"], 1)).toEqual([{ name: "big", items: many(10_000) }]);
+
+		Reflect.deleteProperty(globalThis, Symbol.for(BACKGROUND_WORK_REGISTRY_KEY));
+		registerBackgroundWorkProvider({ name: "big", listActiveWork: () => many(10_001) });
+		expect(collectBackgroundWorkSources(["session-a"], 1)).toEqual([{ name: "big", failed: true }]);
+	});
+
+	it("gives each provider its own context, so a mutating reconcile cannot filter the next one", () => {
+		registerBackgroundWorkProvider({
+			name: "mutator",
+			reconcile: (context) => {
+				(context?.sessionIds as string[]).push("/elsewhere");
+				(context as { nowMs: number } | undefined)!.nowMs = 999;
+			},
+			listActiveWork: () => [
+				{ id: "own", sessionId: "session-a" },
+				{ id: "foreign", sessionId: "/elsewhere" },
+			],
+		});
+		let seenNowMs: number | undefined;
+		registerBackgroundWorkProvider({
+			name: "observer",
+			listActiveWork: (context) => {
+				seenNowMs = context?.nowMs;
+				return [{ id: "kept", sessionId: "session-a" }];
+			},
+		});
+
+		const sources = collectBackgroundWorkSources(["session-a"], 42);
+		expect(sources[0]).toEqual({ name: "mutator", items: [{ id: "own", sessionId: "session-a" }] });
+		expect(sources[1]).toEqual({ name: "observer", items: [{ id: "kept", sessionId: "session-a" }] });
+		expect(seenNowMs).toBe(42);
+	});
