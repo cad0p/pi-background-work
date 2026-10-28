@@ -14,6 +14,32 @@ npm install @cad0p/pi-background-work
 
 The entry point is TypeScript (`./src/index.ts`). Load it through a TypeScript-aware loader such as the jiti loader pi uses. Plain `node` cannot import it.
 
+## The footer line
+
+The package declares a pi extension in its `pi` manifest (`src/extension.ts`). It renders the pending background work of the current session as one footer status line, whichever extension holds that work:
+
+```
+⏳ 2 agents · 1 pi-heartbeat
+```
+
+A dependency's `pi` manifest is never scanned, so the footer loads only when this package itself is installed as a pi package:
+
+```sh
+pi install npm:@cad0p/pi-background-work
+```
+
+Install it once. Every copy of the extension writes the same `bg-work` status key, so two copies at different versions alternate formats once per second.
+
+The extension renders on `session_start`, on `agent_settled`, and on a 1 s timer; it writes only when the text changes and clears the line when nothing is pending. It runs only with a UI: `pi -p` runs and child sessions get no line and no timer.
+
+Segments follow provider registration order and are joined with ` · ` after `⏳ `. A provider with no pending items contributes no segment. A provider that throws, or that returns an item that breaks the rules in "Consumers", shows `<name> ?` instead: pending work is never shown as finished. A provider without a display provider, or whose `describe` returns nothing usable, shows `N <name>`. Each segment is capped at 48 graphemes; pi then truncates the assembled line by display width. The footer never notifies or logs.
+
+Provider rules for the segment:
+
+1. Lead with the count when a provider has several items of a kind, joined with `,`: `2 agents (1 waiting)`, `2 timers: timer-1 0:42, timer-2 1:05`. This way pi's right-side truncation loses detail, not the count. Fold paired items (a heartbeat and its queued wake) into one entry before counting.
+2. Keep `reconcile` cheap. It runs on every tick, about once a second, because a display poll is just another listing.
+3. `describe` runs every second too. Keep it allocation-light and side-effect free, and return `null` to fall back to `N <name>`.
+
 ## Providers
 
 A provider reports background work that is still pending for a session. Register one provider per package per process. Registering a name that already exists replaces the earlier provider.
@@ -32,6 +58,27 @@ registerBackgroundWorkProvider({
   },
 });
 ```
+
+What the footer shows for those items comes from a separate display registry, which leaves the v1 provider object exact:
+
+```ts
+import {
+  listBackgroundWorkDisplayProviders,
+  registerBackgroundWorkDisplayProvider,
+} from "@cad0p/pi-background-work";
+
+const disposeDisplay = registerBackgroundWorkDisplayProvider({
+  name: "my-jobs", // matches the provider name above
+  describe(items) {
+    return items.length === 1 ? "1 job" : `${items.length} jobs`;
+  },
+});
+
+listBackgroundWorkDisplayProviders(); // [{ name: "my-jobs", describe }]
+disposeDisplay(); // removes this exact registration only
+```
+
+A display provider matches its v1 provider by `name`; registration order does not matter, segment order follows the v1 providers. `describe(items, context)` receives v1's context (`sessionId`, `sessionIds`, `nowMs`) and may return `null` or `undefined` to fall back to `N <name>`. Validation mirrors the v1 registry, on register and on read: a name that is empty, padded or contains NUL, a `describe` that is not a function, an unknown field, or more than 100 display providers throws, naming the field. There is no by-name unregister: the disposer removes only the object it registered.
 
 These are this package's recommendations for providers:
 

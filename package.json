@@ -26,6 +26,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -34,6 +39,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
     "@eslint/js": "^9.27.0",
     "@types/node": "^22.20.5",
     "eslint": "^9.27.0",
@@ -45,5 +51,8 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
   }
 }
