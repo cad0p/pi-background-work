@@ -58,8 +58,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The diff is informational. It compares the published upstream tarball
-      # with the last passing source, or with 0.83.0 on the first run.
-      - name: Diff upstream against last passing source
+      # with the last passing bundle, or with 0.83.0 on the first run, and it
+      # diffs the file the runtime actually loads: pi-subagents' package exports
+      # resolve "pi-subagents/background-work" to bundle/background-work.js, so
+      # that is what the compat suite exercises. src/api/background-work.js is
+      # only the fallback for a tarball that predates the bundle.
+      - name: Diff upstream against last passing bundle
         if: steps.gate.outputs.cache-hit != 'true'
         env:
           VERSION: ${{ steps.upstream.outputs.version }}
@@ -67,13 +71,21 @@ jobs:
           mkdir -p .probe/current .probe/base
           npm pack "pi-subagents@$VERSION" --pack-destination .probe/current
           tar -xzf .probe/current/*.tgz -C .probe/current --strip-components=1
+          runtime_file() {
+            for path in bundle/background-work.js src/api/background-work.js; do
+              if [ -f "$1/$path" ]; then echo "$1/$path"; return 0; fi
+            done
+            echo "no background-work.js in $1" >&2
+            return 1
+          }
+          current=$(runtime_file .probe/current)
           base=.probe-pass/background-work.js
           if [ ! -f "$base" ]; then
             npm pack pi-subagents@0.83.0 --pack-destination .probe/base
             tar -xzf .probe/base/*.tgz -C .probe/base --strip-components=1
-            base=.probe/base/src/api/background-work.js
+            base=$(runtime_file .probe/base)
           fi
-          diff -u "$base" .probe/current/src/api/background-work.js > .probe/diff.patch || true
+          diff -u "$base" "$current" > .probe/diff.patch || true
 
       # minimum-release-age=0: without it pnpm may rewrite pnpm-workspace.yaml
       # (minimumReleaseAgeExclude) for a release younger than the age gate.
@@ -93,7 +105,11 @@ jobs:
         if: success() && steps.gate.outputs.cache-hit != 'true'
         run: |
           mkdir -p .probe-pass
-          cp .probe/current/src/api/background-work.js .probe-pass/background-work.js
+          if [ -f .probe/current/bundle/background-work.js ]; then
+            cp .probe/current/bundle/background-work.js .probe-pass/background-work.js
+          else
+            cp .probe/current/src/api/background-work.js .probe-pass/background-work.js
+          fi
 
       - name: Save pass
         if: success() && steps.gate.outputs.cache-hit != 'true'
