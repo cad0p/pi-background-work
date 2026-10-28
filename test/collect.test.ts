@@ -121,7 +121,6 @@ describe("collectBackgroundWorkSources", () => {
 		Reflect.set(globalThis, SLOT, { version: 2, providers: new Map() });
 		expect(collectBackgroundWorkSources(["session-a"], 1)).toEqual([]);
 	});
-});
 
 	it("accepts exactly 10,000 items and fails 10,001", () => {
 		const many = (count: number) =>
@@ -160,3 +159,4 @@ describe("collectBackgroundWorkSources", () => {
 		expect(sources[1]).toEqual({ name: "observer", items: [{ id: "kept", sessionId: "session-a" }] });
 		expect(seenNowMs).toBe(42);
 	});
+});

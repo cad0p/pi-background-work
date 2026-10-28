@@ -86,7 +86,6 @@ describe("composeFooterText", () => {
 			expect(composeFooterText([source("patty", 1)], [display("patty", () => text)], CONTEXT)).toBe(`${PREFIX}${expected}`);
 		}
 	});
-});
 
 	it("returns a segment of exactly 48 graphemes unchanged and cuts a 49th", () => {
 		const at48 = "a".repeat(48);
@@ -97,12 +96,27 @@ describe("composeFooterText", () => {
 	});
 
 	it("never keeps the failure marker out of a capped segment", () => {
-		const sources: BackgroundWorkSource[] = [{ name: "n".repeat(60), failed: true }];
-		const text = composeFooterText(sources, [], CONTEXT);
-		expect(text?.endsWith(" ?")).toBe(true);
-		expect(text?.startsWith(PREFIX)).toBe(true);
+		// A 46-grapheme name plus " ?" fits the 48 exactly and is kept whole.
+		expect(composeFooterText([{ name: "n".repeat(46), failed: true }], [], CONTEXT)).toBe(PREFIX + "n".repeat(46) + " ?");
+		// A longer one is capped to 45 graphemes plus the ellipsis, then the marker: 48 in total.
+		expect(composeFooterText([{ name: "n".repeat(60), failed: true }], [], CONTEXT)).toBe(PREFIX + "n".repeat(45) + "… ?");
+		const long = composeFooterText([{ name: "n".repeat(60), failed: true }], [], CONTEXT);
+		const graphemes = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(long!.slice(PREFIX.length))];
+		expect(graphemes).toHaveLength(48);
+	});
+
+	it("loses only the throwing provider's segment when its display name getter throws", () => {
+		const hostile = {
+			get name(): string {
+				throw new Error("boom");
+			},
+			describe: () => "never",
+		} as unknown as BackgroundWorkDisplayProvider;
+		const displays = [hostile, display("demo", () => "2 demo jobs")];
+		expect(composeFooterText([source("patty", 1), source("demo", 2)], displays, CONTEXT)).toBe(PREFIX + "1 patty" + SEPARATOR + "2 demo jobs");
 	});
 
 	it("trims describe output", () => {
 		expect(composeFooterText([source("demo", 1)], [display("demo", () => "  hi  ")], CONTEXT)).toBe(PREFIX + "hi");
 	});
+});

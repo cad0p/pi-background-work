@@ -39,12 +39,26 @@ function capSegment(text: string, limit: number = MAX_SEGMENT): string {
 	return `${graphemes.slice(0, limit - 1).join("")}…`;
 }
 
+/**
+ * The display provider registered under `name`, reading each candidate's name
+ * inside its own guard: a foreign copy's provider can have a throwing getter,
+ * and one hostile entry must not hide the others.
+ */
+function findDisplay(displays: readonly BackgroundWorkDisplayProvider[], name: string): BackgroundWorkDisplayProvider | undefined {
+	for (const candidate of displays) {
+		try {
+			if (candidate.name === name) return candidate;
+		} catch {}
+	}
+	return undefined;
+}
+
 function describeSource(
 	source: { name: string; items: readonly BackgroundWorkItem[] },
 	displays: readonly BackgroundWorkDisplayProvider[],
 	context: DescribeContext,
 ): string {
-	const display = displays.find((candidate) => candidate.name === source.name);
+	const display = findDisplay(displays, source.name);
 	if (display !== undefined) {
 		try {
 			const text = display.describe(source.items, context);

@@ -219,7 +219,6 @@ describe("background-work footer extension", () => {
 		expect(listedAt).toBeDefined();
 		expect(describedAt).toBe(listedAt);
 	});
-});
 
 	it("keeps exactly one live timer across agent_settled, and none after shutdown", () => {
 		const handlers = loadExtension();
@@ -310,4 +309,30 @@ describe("background-work footer extension", () => {
 		]);
 		emit(handlers, "session_shutdown", ctx);
 	});
+});
 
+	it("keeps the last line when the data path throws outside the collector's guards", () => {
+		const handlers = loadExtension();
+		registerDemo(() => 1);
+		const { ctx, calls } = context();
+		emit(handlers, "session_start", ctx);
+		expect(calls).toEqual([["bg-work", footerText(1)]]);
+
+		// A listing whose array length getter throws escapes the collector (v1's own shape
+		// checks are not guarded), so only the extension's data-path guard keeps pip safe.
+		Reflect.deleteProperty(globalThis, Symbol.for(BACKGROUND_WORK_REGISTRY_KEY));
+		registerBackgroundWorkProvider({
+			name: "demo",
+			listActiveWork: () =>
+				new Proxy([], {
+					get: (_target, key) => {
+						if (key === "length") throw new Error("boom");
+						return undefined;
+					},
+				}) as never,
+		});
+
+		expect(() => vi.advanceTimersByTime(1_000)).not.toThrow();
+		expect(calls).toEqual([["bg-work", footerText(1)]]);
+		emit(handlers, "session_shutdown", ctx);
+	});
