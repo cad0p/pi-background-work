@@ -4,7 +4,7 @@
  * host package is a peer dependency and nothing is bundled.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostContext, HostExtensionApi } from "./host";
 import { collectBackgroundWorkSources } from "./collect";
 import { type BackgroundWorkDisplayProvider, listBackgroundWorkDisplayProviders } from "./display";
 import { BACKGROUND_WORK_STATUS_KEY, composeFooterText } from "./footer";
@@ -20,7 +20,7 @@ function readDisplays(): readonly BackgroundWorkDisplayProvider[] {
 	}
 }
 
-export default function backgroundWorkFooter(pi: ExtensionAPI): void {
+export default function backgroundWorkFooter(pi: HostExtensionApi): void {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let lastText: string | undefined;
 
@@ -35,7 +35,7 @@ export default function backgroundWorkFooter(pi: ExtensionAPI): void {
 	 * means the context is dead, so the tick stops instead of throwing inside a
 	 * timer callback, which pi does not catch.
 	 */
-	const render = (ctx: ExtensionContext): boolean => {
+	const render = (ctx: HostContext): boolean => {
 		let forms: string[];
 		try {
 			forms = sessionIdentityForms(ctx.sessionManager);
@@ -58,7 +58,7 @@ export default function backgroundWorkFooter(pi: ExtensionAPI): void {
 	};
 
 	/** Render now and re-arm the 1 s chain, on the freshly captured context. */
-	const arm = (ctx: ExtensionContext): void => {
+	const arm = (ctx: HostContext): void => {
 		stopTick();
 		if (!ctx.hasUI) return;
 		const run = (): void => {
