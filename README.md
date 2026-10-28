@@ -84,11 +84,11 @@ Convention: count consecutive crash interruptions per item. Persist that a recov
 
 ## Compatibility
 
-`test/compat.test.ts` loads pi-subagents' published `pi-subagents/background-work` (a devDependency pinned to exact `0.83.0`) and this package in one process. It checks that each side sees the other's providers and items, that invalid providers and caps fail the same way on both, and that `listActiveWork` and `reconcile` receive the same context shape. The `.d.ts` signature drift from upstream is reported informationally, not asserted.
+`test/compat.test.ts` loads pi-subagents' published `pi-subagents/background-work` (a devDependency pinned to exact `0.83.0`) and this package in one process. It checks that each side sees the other's providers and items, that invalid providers and caps fail the same way on both, and that `listActiveWork` and `reconcile` receive the same context shape.
 
 The upstream `waitForSubagents` cases are not ported. They are listed in `test/registry.test.ts`.
 
-`.github/workflows/upstream-probe.yml` runs daily and on push to `main`. It installs the latest published `pi-subagents` on the runner only and runs the compat test. A version that passes is cached and not retested. A failure opens, or comments on, one issue labelled `upstream-probe`. A later pass closes it.
+`.github/workflows/upstream-probe.yml` runs daily and on push to `main`. It installs the latest published `pi-subagents` on the runner only and runs the compat test. A pass is cached per pair of upstream version and `main` commit, so a new upstream release or a new commit on `main` runs it again. A failure opens, or comments on, one issue labelled `upstream-probe`. A later pass closes it.
 
 ## Development
 
