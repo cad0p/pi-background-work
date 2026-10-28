@@ -43,6 +43,16 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 		},
 	],
 	[
+		"unknown item field",
+		(api) => {
+			api.registerBackgroundWorkProvider({
+				name: "p",
+				listActiveWork: () => [{ id: "a", sessionId: "s", extra: true }],
+			});
+			api.snapshotBackgroundWork(["s"], 1);
+		},
+	],
+	[
 		"duplicate item ids",
 		(api) => {
 			api.registerBackgroundWorkProvider({
