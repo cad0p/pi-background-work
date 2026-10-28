@@ -76,7 +76,9 @@ jobs:
           snapshot() {
             local root="$1" out="$2" entry dir name i n
             # Absolute path: node resolves a relative "require" argument as a module name, not a path.
-            entry=$(node -e 'const p=require(process.argv[1]+"/package.json");const e=p.exports&&p.exports["./background-work"];const d=typeof e==="string"?e:e&&e.default;if(!d)process.exit(1);process.stdout.write(process.argv[1]+"/"+d.replace(/^\.\//,""))' "$(cd "$root" && pwd)") || {
+            # Any condition shape: a string, or an object whose "default", "import" or "node"
+            # condition (or first string value) names the file node would load.
+            entry=$(node -e 'const p=require(process.argv[1]+"/package.json");const e=p.exports&&p.exports["./background-work"];const d=typeof e==="string"?e:e&&(e.default??e.import??e.node??Object.values(e).find(v=>typeof v==="string"));if(typeof d!=="string")process.exit(1);process.stdout.write(process.argv[1]+"/"+d.replace(/^\.\//,""))' "$(cd "$root" && pwd)") || {
               echo "no ./background-work export in $root" >&2
               return 1
             }
@@ -84,8 +86,12 @@ jobs:
             cp "$entry" "$out/01-entry.js"
             dir=$(dirname "$entry")
             i=1
-            for name in $(grep -oE 'from "\./[^"]+"' "$entry" | sed -E 's/^from "\.\///; s/"$//' | sort -u); do
-              [ -f "$dir/$name" ] || continue
+            # Both `from "./x.js"` and `import "./x.js"` (with or without the space), minified forms included.
+            for name in $(grep -oE '(from|import) ?"\./[^"]+"' "$entry" | sed -E 's/^[a-z]+ ?"\.\///; s/"$//' | sort -u); do
+              if [ ! -f "$dir/$name" ]; then
+                echo "entry imports $name, which is not in $dir" >&2
+                return 1
+              fi
               i=$((i+1))
               printf -v n '%02d-import.js' "$i"
               cp "$dir/$name" "$out/$n"
@@ -120,6 +126,9 @@ jobs:
       - name: Record pass
         if: success() && steps.gate.outputs.cache-hit != 'true'
         run: |
+          # Replaced, not merged: a snapshot left over from an older layout would
+          # otherwise survive into the cache and show up as a spurious deletion.
+          rm -rf .probe-pass
           mkdir -p .probe-pass
           cp -a .probe/current-runtime/. .probe-pass/
 
@@ -157,7 +166,7 @@ jobs:
             echo "Compatibility log (tail):"
             tail -n 80 .probe/compat.log 2>/dev/null || echo "(no compat log: failed before the suite ran)"
             echo
-            echo "Upstream diff against last passing source (head):"
+            echo "Upstream diff against the last passing runtime snapshot (head):"
             head -n 200 .probe/diff.patch 2>/dev/null || echo "(no diff)"
           } > "$body"
           num=$(gh issue list --label upstream-probe --state open --json number,title --jq '.[] | select(.title | startswith("Upstream probe:")) | .number' | head -n 1)
