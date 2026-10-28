@@ -31,7 +31,7 @@ jobs:
         run: echo "version=$(npm view pi-subagents version)" >> "$GITHUB_OUTPUT"
 
       # An exact hit means this version already passed on this commit. A
-      # prefix hit restores the last passing source as the diff baseline.
+      # prefix hit restores the last passing runtime snapshot as the diff baseline.
       - name: Restore last passing probe
         id: gate
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -57,35 +57,51 @@ jobs:
         if: steps.gate.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
 
-      # The diff is informational. It compares the published upstream tarball
-      # with the last passing bundle, or with 0.83.0 on the first run, and it
-      # diffs the file the runtime actually loads: pi-subagents' package exports
-      # resolve "pi-subagents/background-work" to bundle/background-work.js, so
-      # that is what the compat suite exercises. src/api/background-work.js is
-      # only the fallback for a tarball that predates the bundle.
-      - name: Diff upstream against last passing bundle
+      # The diff is informational: it is what a human reads to decide whether an
+      # upstream change matters. It diffs the *runtime* entry — the file
+      # "pi-subagents/background-work" resolves to through the tarball's own
+      # exports, which is what test/compat.test.ts imports — together with the
+      # local files that entry imports. The entry is a re-export shim, so the
+      # code lives in its chunk; copying by position (01-entry.js, 02-import.js,
+      # ...) keeps the diff readable when the chunk hash changes between releases.
+      - name: Diff upstream against the last passing runtime snapshot
         if: steps.gate.outputs.cache-hit != 'true'
         env:
           VERSION: ${{ steps.upstream.outputs.version }}
         run: |
+          set -euo pipefail
           mkdir -p .probe/current .probe/base
           npm pack "pi-subagents@$VERSION" --pack-destination .probe/current
           tar -xzf .probe/current/*.tgz -C .probe/current --strip-components=1
-          runtime_file() {
-            for path in bundle/background-work.js src/api/background-work.js; do
-              if [ -f "$1/$path" ]; then echo "$1/$path"; return 0; fi
+          snapshot() {
+            local root="$1" out="$2" entry dir name i n
+            # Absolute path: node resolves a relative "require" argument as a module name, not a path.
+            entry=$(node -e 'const p=require(process.argv[1]+"/package.json");const e=p.exports&&p.exports["./background-work"];const d=typeof e==="string"?e:e&&e.default;if(!d)process.exit(1);process.stdout.write(process.argv[1]+"/"+d.replace(/^\.\//,""))' "$(cd "$root" && pwd)") || {
+              echo "no ./background-work export in $root" >&2
+              return 1
+            }
+            mkdir -p "$out"
+            cp "$entry" "$out/01-entry.js"
+            dir=$(dirname "$entry")
+            i=1
+            for name in $(grep -oE 'from "\./[^"]+"' "$entry" | sed -E 's/^from "\.\///; s/"$//' | sort -u); do
+              [ -f "$dir/$name" ] || continue
+              i=$((i+1))
+              printf -v n '%02d-import.js' "$i"
+              cp "$dir/$name" "$out/$n"
             done
-            echo "no background-work.js in $1" >&2
-            return 1
           }
-          current=$(runtime_file .probe/current)
-          base=.probe-pass/background-work.js
-          if [ ! -f "$base" ]; then
+          snapshot .probe/current .probe/current-runtime
+          base=.probe-pass
+          # A cache saved by an older workflow holds one file, not a snapshot of
+          # the entry and its imports: treat it as absent and fall back to 0.83.0.
+          if [ ! -f "$base/01-entry.js" ]; then
             npm pack pi-subagents@0.83.0 --pack-destination .probe/base
             tar -xzf .probe/base/*.tgz -C .probe/base --strip-components=1
-            base=$(runtime_file .probe/base)
+            snapshot .probe/base .probe/base-runtime
+            base=.probe/base-runtime
           fi
-          diff -u "$base" "$current" > .probe/diff.patch || true
+          diff -ru "$base" .probe/current-runtime > .probe/diff.patch || true
 
       # minimum-release-age=0: without it pnpm may rewrite pnpm-workspace.yaml
       # (minimumReleaseAgeExclude) for a release younger than the age gate.
@@ -105,11 +121,7 @@ jobs:
         if: success() && steps.gate.outputs.cache-hit != 'true'
         run: |
           mkdir -p .probe-pass
-          if [ -f .probe/current/bundle/background-work.js ]; then
-            cp .probe/current/bundle/background-work.js .probe-pass/background-work.js
-          else
-            cp .probe/current/src/api/background-work.js .probe-pass/background-work.js
-          fi
+          cp -a .probe/current-runtime/. .probe-pass/
 
       - name: Save pass
         if: success() && steps.gate.outputs.cache-hit != 'true'
