@@ -309,7 +309,6 @@ describe("background-work footer extension", () => {
 		]);
 		emit(handlers, "session_shutdown", ctx);
 	});
-});
 
 	it("keeps the last line when the data path throws outside the collector's guards", () => {
 		const handlers = loadExtension();
@@ -336,3 +335,4 @@ describe("background-work footer extension", () => {
 		expect(calls).toEqual([["bg-work", footerText(1)]]);
 		emit(handlers, "session_shutdown", ctx);
 	});
+});
