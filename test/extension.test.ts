@@ -1,10 +1,10 @@
-import type { HostContext, HostExtensionApi } from "../src/host";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BACKGROUND_WORK_DISPLAY_KEY, registerBackgroundWorkDisplayProvider } from "../src/display";
 import backgroundWorkFooter from "../src/extension";
 import { BACKGROUND_WORK_REGISTRY_KEY, registerBackgroundWorkProvider } from "../src/registry";
 
-type Handler = (event: unknown, ctx: HostContext) => unknown;
+type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 type StatusCall = [key: string, text: string | undefined];
 
 const REGISTRY_SLOT = Symbol.for(BACKGROUND_WORK_REGISTRY_KEY);
@@ -27,12 +27,12 @@ function loadExtension(): Map<string, Handler> {
 			handlers.set(event, handler);
 			return () => handlers.delete(event);
 		},
-	} as unknown as HostExtensionApi;
+	} as unknown as ExtensionAPI;
 	backgroundWorkFooter(pi);
 	return handlers;
 }
 
-function emit(handlers: Map<string, Handler>, event: string, ctx: HostContext): void {
+function emit(handlers: Map<string, Handler>, event: string, ctx: ExtensionContext): void {
 	handlers.get(event)?.({ type: event }, ctx);
 }
 
@@ -41,13 +41,13 @@ interface ContextOptions {
 	onStatus?: (key: string, text: string | undefined) => void;
 }
 
-function context(options: ContextOptions = {}): { ctx: HostContext; calls: StatusCall[] } {
+function context(options: ContextOptions = {}): { ctx: ExtensionContext; calls: StatusCall[] } {
 	const calls: StatusCall[] = [];
 	const ctx = {
 		hasUI: options.hasUI ?? true,
 		sessionManager: { getSessionId: () => "session-a", getSessionFile: () => "/sessions/a.jsonl" },
 		ui: { setStatus: options.onStatus ?? ((key: string, text: string | undefined) => calls.push([key, text])) },
-	} as unknown as HostContext;
+	} as unknown as ExtensionContext;
 	return { ctx, calls };
 }
 
@@ -297,7 +297,7 @@ describe("background-work footer extension", () => {
 			hasUI: true,
 			sessionManager: { getSessionId: () => identity, getSessionFile: () => undefined },
 			ui: { setStatus: (key: string, text: string | undefined) => calls.push([key, text]) },
-		} as unknown as HostContext;
+		} as unknown as ExtensionContext;
 
 		emit(handlers, "session_start", ctx);
 		expect(calls).toEqual([["bg-work", footerText(1)]]);
