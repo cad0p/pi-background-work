@@ -27,6 +27,15 @@ function failureOf(api: Api, run: (api: Api) => void): string {
 	}
 }
 
+/** One body for both the failure row and the test that names the field, so they cannot drift. */
+const unknownItemField = (api: Api): void => {
+	api.registerBackgroundWorkProvider({
+		name: "p",
+		listActiveWork: () => [{ id: "a", sessionId: "s", extra: true }],
+	});
+	api.snapshotBackgroundWork(["s"], 1);
+};
+
 const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 	[
 		"malformed provider name",
@@ -42,16 +51,7 @@ const failures: ReadonlyArray<readonly [string, (api: Api) => void]> = [
 			api.registerBackgroundWorkProvider({ name: "p", listActiveWork: () => [], extra: true });
 		},
 	],
-	[
-		"unknown item field",
-		(api) => {
-			api.registerBackgroundWorkProvider({
-				name: "p",
-				listActiveWork: () => [{ id: "a", sessionId: "s", extra: true }],
-			});
-			api.snapshotBackgroundWork(["s"], 1);
-		},
-	],
+	["unknown item field", unknownItemField],
 	[
 		"duplicate item ids",
 		(api) => {
@@ -234,11 +234,7 @@ describe("compatibility with pi-subagents/background-work", () => {
 	});
 
 	it("names the unknown item field on both sides", () => {
-		const run = (api: Api): void => {
-			api.registerBackgroundWorkProvider({ name: "p", listActiveWork: () => [{ id: "a", sessionId: "s", extra: true }] });
-			api.snapshotBackgroundWork(["s"], 1);
-		};
-		for (const [, api] of apis) expect(failureOf(api, run)).toContain("unknown fields: extra");
+		for (const [, api] of apis) expect(failureOf(api, unknownItemField)).toContain("unknown fields: extra");
 	});
 
 	it.each(failures)("rejects %s with the same error on both sides", (_label, run) => {

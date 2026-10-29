@@ -1,5 +1,10 @@
-# Build-script approval: vitest needs esbuild's binary.
+# Build-script approval for the pi peer graph (mirrors pi-heartbeat): esbuild's
+# binary is needed by vitest; genai's postinstall by its JS runtime; koffi and
+# protobufjs work without theirs.
 allowBuilds:
+  '@google/genai': true
   esbuild: true
+  koffi: false
+  protobufjs: false
 minimumReleaseAgeExclude:
   - pi-subagents@0.83.0
