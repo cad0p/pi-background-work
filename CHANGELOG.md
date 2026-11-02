@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [calver-released]
+
+<!-- USER-EDITABLE SECTION START -->
+<!-- Add your curated release notes here. -->
+<!-- USER-EDITABLE SECTION END -->
+
+### 🐛 Bug Fixes
+
+- *(package)* Ship CHANGELOG.md so Pi shows Extension Updates (closes #13)
+
+
 ## [0.0.2] - 2026-10-29
 
 <!-- USER-EDITABLE SECTION START -->
